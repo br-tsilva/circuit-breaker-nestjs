@@ -3,18 +3,18 @@ import * as circuitBreaker from 'opossum';
 
 export class CircuitBreaker {
   private breaker: circuitBreaker;
-  private defaultResponse: any = {};
+  private options: CircuitBreaker.Options;
 
   constructor(
     action: (...args: any[]) => Promise<any>,
     options: CircuitBreaker.Options,
   ) {
     this.breaker = new circuitBreaker(action, {
-      timeout: options.timeout,
+      timeout: options.timeout ?? false,
       resetTimeout: options.resetTimeout,
       errorThresholdPercentage: options.errorPercentage,
     });
-    this.defaultResponse = options.defaultResponse;
+    this.options = options;
   }
 
   fire<T>(...args: any[]): Promise<T> {
@@ -23,26 +23,28 @@ export class CircuitBreaker {
       .then((res: T) => res)
       .catch(() => {
         Logger.error('Circuit breaker has failed', CircuitBreaker.name);
-        return this.defaultResponse;
+        if (this.options.throwResponse) {
+          throw this.options.defaultResponse;
+        }
+        return this.options.defaultResponse;
       });
   }
 
   setClosed() {
     this.breaker.close();
-    Logger.warn('Circuit breaker has been closed');
   }
 
   setOpened() {
     this.breaker.open();
-    Logger.warn('Circuit breaker has been opened');
   }
 }
 
 export namespace CircuitBreaker {
   export type Options = {
-    timeout: number;
+    timeout?: number;
     errorPercentage: number;
     resetTimeout: number;
     defaultResponse: any;
+    throwResponse?: boolean;
   };
 }

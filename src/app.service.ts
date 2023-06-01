@@ -1,13 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { CircuitBreaker } from './circuit-breaker';
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 @Injectable()
 export class AppService {
-  private getHelloCircuitBreaker: CircuitBreaker;
+  private sleepCircuitBreaker: CircuitBreaker;
 
   constructor() {
-    this.getHelloCircuitBreaker = new CircuitBreaker(this.test, {
-      timeout: 3000,
+    this.sleepCircuitBreaker = new CircuitBreaker(sleep, {
       resetTimeout: 10000,
       errorPercentage: 5,
       defaultResponse: Result.fail(
@@ -17,21 +18,25 @@ export class AppService {
   }
 
   async getHello(): Promise<string> {
-    const result = await this.getHelloCircuitBreaker.fire<
-      ResultType<string, string>
-    >(true);
+    const result = await this.test();
     if (result.isFailure()) {
+      this.sleepCircuitBreaker.setOpened();
       return result.getError();
     }
     return result.getValue();
   }
 
-  async test(isError: boolean): Promise<ResultType<string, string>> {
-    if (isError) {
-      this.getHelloCircuitBreaker.setOpened();
-      return Result.fail('Mensagem de erro');
+  async test(): Promise<ResultType<string, string>> {
+    const result = await this.sleepCircuitBreaker.fire<void | ResultType<
+      void,
+      string
+    >>(1500);
+    if (!result) {
+      return Result.fail('Mensagem de error');
     }
-    return Result.ok('Mensagem de sucesso!');
+    if (result.isFailure()) {
+      return result;
+    }
   }
 }
 
